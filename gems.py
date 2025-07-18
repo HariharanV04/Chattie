@@ -166,7 +166,7 @@ class ChatAnalyzer:
 def index():
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
-    return render_template('index.html')
+    return render_template('index.html')  # This references templates/index.html
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def settings():
