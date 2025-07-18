@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTS Chat Analyzer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.2em;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .card h2 {
+            color: #5a67d8;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 3px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .form-row > div {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #5a67d8;
+            box-shadow: 0 0 0 3px rgba(90,103,216,0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #5a67d8, #667eea);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(90,103,216,0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #718096, #4a5568);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+        }
+
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: #f7fafc;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #5a67d8;
+            background: #edf2f7;
+        }
+
+        .upload-area.dragover {
+            border-color: #5a67d8;
+            background: #e6fffa;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #a0aec0;
+            margin-bottom: 15px;
+        }
+
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 15px;
+            background: #f8fafc;
+        }
+
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .player-name {
+            font-weight: 600;
+            color: #5a67d8;
+        }
+
+        .timestamp {
+            color: #718096;
+            font-size: 12px;
+        }
+
+        .original-message {
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .translated-message {
+            color: #38a169;
+            font-style: italic;
+            padding-left: 15px;
+            border-left: 3px solid #38a169;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #f0fff4;
+            color: #38a169;
+            border: 1px solid #c6f6d5;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #e53e3e;
+            border: 1px solid #feb2b2;
+        }
+
+        .status.info {
+            background: #ebf8ff;
+            color: #3182ce;
+            border: 1px solid #bee3f8;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                flex-direction: column;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+        }
+
+        .connection-status.connected {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .connection-status.disconnected {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #5a67d8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🎮 RTS Chat Analyzer</h1>
+            <p>Real-time chat translation for online gaming</p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>⚙️ Settings</h2>
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label>Target Language</label>
+                        <select id="targetLanguage">
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="it">Italian</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="ru">Russian</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="zh">Chinese</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Chat Area Coordinates</label>
+                        <div class="form-row">
+                            <div>
+                                <label>X</label>
+                                <input type="number" id="chatX" value="100">
+                            </div>
+                            <div>
+                                <label>Y</label>
+                                <input type="number" id="chatY" value="400">
+                            </div>
+                            <div>
+                                <label>Width</label>
+                                <input type="number" id="chatWidth" value="600">
+                            </div>
+                            <div>
+                                <label>Height</label>
+                                <input type="number" id="chatHeight" value="200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Capture Interval (seconds)</label>
+                        <input type="number" id="captureInterval" value="2" min="0.5" max="10" step="0.5">
+                    </div>
+
+                    <button type="submit" class="btn">💾 Save Settings</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>📸 Screenshot Upload</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📷</div>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                    <p>Upload game screenshots to analyze chat</p>
+                </div>
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                <div id="imagePreview"></div>
+                <button id="processBtn" class="btn btn-success" style="display: none;">
+                    🔍 Process Image
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>💬 Chat Messages</h2>
+            <div id="statusMessage"></div>
+            <div id="chatContainer" class="chat-container">
+                <div style="text-align: center; color: #718096; padding: 50px;">
+                    No messages yet. Upload a screenshot to get started!
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button id="clearChat" class="btn btn-secondary">🗑️ Clear Chat</button>
+                <button id="exportChat" class="btn btn-secondary">📤 Export Chat</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+        let currentImage = null;
+        let messages = [];
+
+        // Connection status
+        const connectionStatus = document.getElementById('connectionStatus');
+        
+        socket.on('connect', function() {
+            connectionStatus.textContent = 'Connected';
+            connectionStatus.className = 'connection-status connected';
+        });
+
+        socket.on('disconnect', function() {
+            connectionStatus.textContent = 'Disconnected';
+            connectionStatus.className = 'connection-status disconnected';
+        });
+
+        // Settings form
+        const settingsForm = document.getElementById('settingsForm');
+        settingsForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const settings = {
+                target_language: document.getElementById('targetLanguage').value,
+                chat_area: {
+                    x: parseInt(document.getElementById('chatX').value),
+                    y: parseInt(document.getElementById('chatY').value),
+                    width: parseInt(document.getElementById('chatWidth').value),
+                    height: parseInt(document.getElementById('chatHeight').value)
+                },
+                capture_interval: parseFloat(document.getElementById('captureInterval').value)
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                if (response.ok) {
+                    showStatus('Settings saved successfully!', 'success');
+                } else {
+                    showStatus('Error saving settings', 'error');
+                }
+            } catch (error) {
+                showStatus('Error saving settings', 'error');
+            }
+        });
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const imagePreview = document.getElementById('imagePreview');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showStatus('Please select an image file', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = e.target.result;
+                
+                // Show preview
+                imagePreview.innerHTML = `
+                    <img src="${currentImage}" alt="Preview" class="preview-image">
+                `;
+                
+                processBtn.style.display = 'block';
+                showStatus('Image loaded. Click "Process Image" to analyze.', 'info');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Process image
+        processBtn.addEventListener('click', async function() {
+            if (!currentImage) {
+                showStatus('No image selected', 'error');
+                return;
+            }
+
+            processBtn.innerHTML = '<span class="loading"></span> Processing...';
+            processBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/process_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: currentImage })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (result.messages.length > 0) {
+                        showStatus(`Found ${result.messages.length} new messages`, 'success');
+                    } else {
+                        showStatus('No new messages found in image', 'info');
+                    }
+                } else {
+                    showStatus(result.error || 'Error processing image', 'error');
+                }
+            } catch (error) {
+                showStatus('Error processing image', 'error');
+            } finally {
+                processBtn.innerHTML = '🔍 Process Image';
+                processBtn.disabled = false;
+            }
+        });
+
+        // Socket.IO message handling
+        socket.on('new_message', function(message) {
+            messages.push(message);
+            displayMessage(message);
+        });
+
+        function displayMessage(message) {
+            const chatContainer = document.getElementById('chatContainer');
+            
+            // Clear placeholder text
+            if (chatContainer.innerHTML.includes('No messages yet')) {
+                chatContainer.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            
+            messageDiv.innerHTML = `
+                <div class="chat-header">
+                    <span class="player-name">${escapeHtml(message.player)}</span>
+                    <span class="timestamp">${message.timestamp}</span>
+                </div>
+                <div class="original-message">${escapeHtml(message.original)}</div>
+                ${message.needs_translation ? 
+                    `<div class="translated-message">→ ${escapeHtml(message.translated)}</div>` : 
+                    ''
+                }
+            `;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Clear chat
+        document.getElementById('clearChat').addEventListener('click', function() {
+            if (confirm('Are you sure you want to clear all chat messages?')) {
+                messages = [];
+                document.getElementById('chatContainer').innerHTML = `
+                    <div style="text-align: center; color: #718096; padding: 50px;">
+                        No messages yet. Upload a screenshot to get started!
+                    </div>
+                `;
+            }
+        });
+
+        // Export chat
+        document.getElementById('exportChat').addEventListener('click', function() {
+            if (messages.length === 0) {
+                showStatus('No messages to export', 'info');
+                return;
+            }
+
+            const exportData = {
+                exported_at: new Date().toISOString(),
+                messages: messages
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], 
+                { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat_export_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            showStatus('Chat exported successfully!', 'success');
+        });
+
+        // Utility functions
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        // Load settings on page load
+        window.addEventListener('load', async function() {
+            try {
+                const response = await fetch('/api/settings');
+                if (response.ok) {
+                    const settings = await response.json();
+                    
+                    document.getElementById('targetLanguage').value = settings.target_language || 'en';
+                    document.getElementById('chatX').value = settings.chat_area.x || 100;
+                    document.getElementById('chatY').value = settings.chat_area.y || 400;
+                    document.getElementById('chatWidth').value = settings.chat_area.width || 600;
+                    document.getElementById('chatHeight').value = settings.chat_area.height || 200;
+                    document.getElementById('captureInterval').value = settings.capture_interval || 2;
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        });
+    </script>
+</body>
+</html>
